@@ -96,8 +96,21 @@ class SelectionOutputParser(BaseOutputParser):
         if not isinstance(json_obj, list):
             raise ValueError(f"Failed to convert output to JSON: {output!r}")
 
-        json_output = self._format_output(json_obj)
-        answers = [Answer.from_dict(json_dict) for json_dict in json_output]
+        if not all(isinstance(item, dict) for item in json_obj):
+            raise OutputParserException(
+                f"Expected a JSON object or a list of JSON objects. Got: {output!r}"
+            )
+
+        try:
+            json_output = self._format_output(json_obj)
+            answers = [Answer.from_dict(json_dict) for json_dict in json_output]
+            if any(a.choice is None or a.reason is None for a in answers):
+                raise ValueError("choice and reason must not be null")
+        except (KeyError, TypeError, ValueError, OverflowError) as e:
+            raise OutputParserException(
+                f"Output does not match the expected choice/reason format: {e!r}. "
+                f"Got: {output!r}"
+            ) from e
         return StructuredOutput(raw_output=output, parsed_output=answers)
 
     def format(self, prompt_template: str) -> str:
