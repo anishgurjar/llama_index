@@ -1,5 +1,5 @@
 import pytest
-from llama_index.core.output_parsers.base import StructuredOutput
+from llama_index.core.output_parsers.base import OutputParserException, StructuredOutput
 from llama_index.core.output_parsers.selection import SelectionOutputParser
 
 
@@ -80,3 +80,39 @@ def test_failed_parse(output_parser: SelectionOutputParser) -> None:
     )
     with pytest.raises(ValueError, match="Failed to convert*") as exc_info:
         output_parser.parse(output=no_json_in_response)
+
+
+@pytest.mark.parametrize(
+    "output",
+    [
+        pytest.param('{"a": 1}', id="no_required_keys"),
+        pytest.param('[{"choice": 1}]', id="missing_reason"),
+        pytest.param('[{"reason": "because"}]', id="missing_choice"),
+        pytest.param('[{"choice": "first", "reason": "because"}]', id="bad_choice"),
+        pytest.param("[1, 2]", id="list_of_non_objects"),
+        pytest.param('[{"choice": 1e999, "reason": "because"}]', id="infinite_choice"),
+        pytest.param('[{"choice": null, "reason": "because"}]', id="null_choice"),
+        pytest.param('[{"choice": 1, "reason": null}]', id="null_reason"),
+    ],
+)
+def test_parse_wrong_shape_raises_output_parser_exception(
+    output_parser: SelectionOutputParser, output: str
+) -> None:
+    with pytest.raises(OutputParserException):
+        output_parser.parse(output=output)
+
+
+@pytest.mark.parametrize(
+    "output",
+    [
+        pytest.param("{}", id="empty_object"),
+        pytest.param("[{}]", id="empty_item"),
+        pytest.param("[null]", id="null_item"),
+        pytest.param('{"x": {"y": 1}}', id="nested_without_keys"),
+    ],
+)
+def test_parse_empty_or_unrelated_json_raises_output_parser_exception(
+    output_parser: SelectionOutputParser, output: str
+) -> None:
+    with pytest.raises(OutputParserException):
+        output_parser.parse(output=output)
